@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "test": "playwright test",
-    "build": "tsc"
+    "build": "tsc",
+    "experiment": "npm run build && node dist/src/experiments/experiment-runner.js",
+    "analyze": "npm run build && node dist/src/experiments/analyze-results.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",
