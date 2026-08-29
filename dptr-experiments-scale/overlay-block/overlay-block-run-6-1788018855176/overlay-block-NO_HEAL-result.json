@@ -1,0 +1,15 @@
+{
+  "taskId": "overlay-block",
+  "taskLabel": "Overlay blocking interaction",
+  "taskCategory": "BUG",
+  "runId": "overlay-block-run-6-1788018855176",
+  "engine": "NO_HEAL",
+  "outcome": "FAIL",
+  "repairedSelector": null,
+  "decision": null,
+  "domDistance": null,
+  "visualSimilarity": null,
+  "invariantPassed": null,
+  "error": null,
+  "artifactDir": "dptr-experiments-scale/overlay-block/overlay-block-run-6-1788018855176"
+}

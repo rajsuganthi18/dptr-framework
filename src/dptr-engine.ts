@@ -70,31 +70,59 @@ export class DPTRResolver {
 
     // Find candidate nodes that might match baseline: search page for elements with same tag OR role/button semantics
     // Strategy: collect candidates from querySelectorAll by tag and by text similarity heuristics
-    const candidatesInfo: LocatingContext[] = await page.evaluate(
-      (baselineTag, baselineText) => {
-        const all = Array.from(document.querySelectorAll(baselineTag));
-        // include elements with role=button or button tags if tag mismatches
-        const extras = Array.from(document.querySelectorAll('[role="button"], button, a'));
-        const pool = Array.from(new Set([...all, ...extras])).slice(0, 200);
-        return pool.map((el) => {
-          const rect = el.getBoundingClientRect();
-          const attrs: Record<string, string> = {};
-          for (let i = 0; i < el.attributes.length; i++) {
-            const a = el.attributes.item(i)!;
-            attrs[a.name] = a.value;
-          }
-          return {
-            tag: el.tagName.toLowerCase(),
-            textContent: (el.textContent || '').trim(),
-            attributes: attrs,
-            boundingBox: rect && rect.width && rect.height ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
-            // We cannot capture screenshots here; will be captured by Playwright locator below
-          };
-        });
-      },
-      baseline.tag,
-      baseline.textContent
-    );
+    let candidatesInfo: any[] = [];
+    try {
+      candidatesInfo = await page.evaluate(
+        ({ baselineTag, baselineText }) => {
+          const all = Array.from(document.querySelectorAll(baselineTag));
+          // include elements with role=button or button tags if tag mismatches
+          const extras = Array.from(document.querySelectorAll('[role="button"], button, a'));
+          const pool = Array.from(new Set([...all, ...extras])).slice(0, 200);
+          return pool.map((el) => {
+            const rect = el.getBoundingClientRect();
+            const attrs: Record<string, string> = {};
+            for (let i = 0; i < el.attributes.length; i++) {
+              const a = el.attributes.item(i)!;
+              attrs[a.name] = a.value;
+            }
+            return {
+              tag: el.tagName.toLowerCase(),
+              textContent: (el.textContent || '').trim(),
+              attributes: attrs,
+              boundingBox: rect && rect.width && rect.height ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
+              // We cannot capture screenshots here; will be captured by Playwright locator below
+            };
+          });
+        },
+        { baselineTag: baseline.tag, baselineText: baseline.textContent }
+      );
+    } catch (err: any) {
+      // Evaluation can fail if the page context is closed or navigation happens.
+      // Log and fall back to empty candidates so DPTR makes an explicit decision.
+      // This prevents tests from timing out due to uncaught page.evaluate errors.
+      // eslint-disable-next-line no-console
+      console.warn('DPTR: page.evaluate failed during candidate discovery:', err && err.message ? err.message : err);
+      candidatesInfo = [];
+    }
+
+    // If no DOM candidates found and we have a baseline screenshot, try template matching
+    if (candidatesInfo.length === 0 && baseline.screenshotBuffer) {
+      try {
+        const match = await (await import('./visual-oracle')).findBestMatchOnPage(page, baseline.screenshotBuffer);
+        if (match && match.score > 0.35) {
+          // create a synthetic candidate entry matching the shape used below
+          candidatesInfo.push({
+            tag: 'canvas-region',
+            textContent: '',
+            attributes: {},
+            boundingBox: { x: match.x, y: match.y, width: match.width, height: match.height },
+            _templateMatchScore: match.score,
+          });
+        }
+      } catch (err) {
+        // ignore template matching failures
+      }
+    }
 
     // Convert candidateInfo into real LocatingContexts with screenshots
     const enrichedCandidates: LocatingContext[] = [];
@@ -110,15 +138,28 @@ export class DPTRResolver {
         // use text selector
         candidateSelector = `${c.tag}:has-text("${c.textContent.slice(0, 30)}")`;
       }
-      const locator = page.locator(candidateSelector).first();
-      const boundingBox = await locator.boundingBox().catch(() => c.boundingBox || null);
-      const screenshotBuffer = await (async () => {
+      let boundingBox = null;
+      let screenshotBuffer: Buffer | undefined = undefined;
+      // If this is a synthetic canvas-region candidate, capture by page screenshot clip
+      if (c._templateMatchScore && c.boundingBox) {
+        boundingBox = c.boundingBox;
         try {
-          return await locator.screenshot({ type: 'png' });
+          const clip = { x: Math.max(0, Math.floor(boundingBox.x)), y: Math.max(0, Math.floor(boundingBox.y)), width: Math.max(1, Math.floor(boundingBox.width)), height: Math.max(1, Math.floor(boundingBox.height)) } as any;
+          screenshotBuffer = await page.screenshot({ type: 'png', clip }).catch(() => undefined);
         } catch {
-          return undefined;
+          screenshotBuffer = undefined;
         }
-      })();
+      } else {
+        const locator = page.locator(candidateSelector).first();
+        boundingBox = await locator.boundingBox().catch(() => c.boundingBox || null);
+        screenshotBuffer = await (async () => {
+          try {
+            return await locator.screenshot({ type: 'png' });
+          } catch {
+            return undefined;
+          }
+        })();
+      }
       enrichedCandidates.push({
         originalSelector: selector,
         tag: c.tag,
@@ -126,6 +167,8 @@ export class DPTRResolver {
         attributes: c.attributes,
         boundingBox,
         screenshotBuffer,
+        // preserve template match score if present
+        ...(c._templateMatchScore ? { templateMatchScore: c._templateMatchScore } : {}),
       });
     }
 
@@ -150,6 +193,10 @@ export class DPTRResolver {
         const inv = await InvariantVerifier.isElementClickable(page, locator);
         invariantPassed = !!inv.ok;
         invariantReason = inv.reason || '';
+      } else if ((cand as any).templateMatchScore) {
+        // For canvas-region/template matches, use template score as proxy for invariant
+        invariantPassed = !!((cand as any).templateMatchScore > 0.6);
+        invariantReason = `Template match score ${(cand as any).templateMatchScore}`;
       } else {
         invariantReason = 'No stable selector for invariant evaluation';
       }

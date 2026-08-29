@@ -1,0 +1,10 @@
+[
+  {
+    "id": "example-local-1",
+    "label": "Local clone example",
+    "baselineHtml": "<html><body><button id=\"submit-btn\">Submit</button></body></html>",
+    "mutatedHtml": "<html><body><button id=\"confirm-pay-btn\">Confirm</button></body></html>",
+    "selector": "#submit-btn",
+    "category": "UI_UPDATE"
+  }
+]

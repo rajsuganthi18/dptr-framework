@@ -1,0 +1,15 @@
+{
+  "taskId": "handler-removed",
+  "taskLabel": "Event handler removed",
+  "taskCategory": "BUG",
+  "runId": "handler-removed-run-1-1788019072225",
+  "engine": "NO_HEAL",
+  "outcome": "PASS",
+  "repairedSelector": null,
+  "decision": null,
+  "domDistance": null,
+  "visualSimilarity": null,
+  "invariantPassed": null,
+  "error": null,
+  "artifactDir": "dptr-experiments-scale/handler-removed/handler-removed-run-1-1788019072225"
+}

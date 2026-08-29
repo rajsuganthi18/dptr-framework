@@ -7,6 +7,7 @@ export interface LocatingContext {
   boundingBox: { x: number; y: number; width: number; height: number } | null;
   attributes: Record<string, string>;
   screenshotBuffer?: Buffer;
+  templateMatchScore?: number;
 }
 
 export interface OracleEvaluationResult {

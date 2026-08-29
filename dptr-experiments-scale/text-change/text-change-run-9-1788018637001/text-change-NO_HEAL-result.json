@@ -1,0 +1,15 @@
+{
+  "taskId": "text-change",
+  "taskLabel": "Text change only",
+  "taskCategory": "UI_UPDATE",
+  "runId": "text-change-run-9-1788018637001",
+  "engine": "NO_HEAL",
+  "outcome": "PASS",
+  "repairedSelector": null,
+  "decision": null,
+  "domDistance": null,
+  "visualSimilarity": null,
+  "invariantPassed": null,
+  "error": null,
+  "artifactDir": "dptr-experiments-scale/text-change/text-change-run-9-1788018637001"
+}

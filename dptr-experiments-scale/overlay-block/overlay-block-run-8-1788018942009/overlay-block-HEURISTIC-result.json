@@ -1,0 +1,15 @@
+{
+  "taskId": "overlay-block",
+  "taskLabel": "Overlay blocking interaction",
+  "taskCategory": "BUG",
+  "runId": "overlay-block-run-8-1788018942009",
+  "engine": "HEURISTIC",
+  "outcome": "FAIL",
+  "repairedSelector": null,
+  "decision": null,
+  "domDistance": null,
+  "visualSimilarity": null,
+  "invariantPassed": null,
+  "error": "Heuristic found no candidate or actions failed",
+  "artifactDir": "dptr-experiments-scale/overlay-block/overlay-block-run-8-1788018942009"
+}
