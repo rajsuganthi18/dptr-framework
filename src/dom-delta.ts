@@ -6,23 +6,27 @@ function levenshtein(a: string, b: string): number {
   const bl = b.length;
   if (al === 0) return bl;
   if (bl === 0) return al;
-  const dp: number[] = new Array(bl + 1);
+
+  const dp: number[] = new Array(bl + 1).fill(0);
   for (let j = 0; j <= bl; ++j) dp[j] = j;
+
   for (let i = 1; i <= al; ++i) {
-    let prev = dp[0];
+    let prev = dp[0] ?? 0;
     dp[0] = i;
+
     for (let j = 1; j <= bl; ++j) {
-      const cur = dp[j];
+      const cur = dp[j] ?? 0;
       const cost = a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1;
       dp[j] = Math.min(
-        dp[j] + 1,
-        dp[j - 1] + 1,
+        (dp[j] ?? 0) + 1,
+        (dp[j - 1] ?? 0) + 1,
         prev + cost
       );
       prev = cur;
     }
   }
-  return dp[bl];
+
+  return dp[bl] ?? 0;
 }
 
 export function normalizedTextSimilarity(a = '', b = ''): number {
@@ -55,11 +59,13 @@ export function computeDomDistance(baseline: LocatingContext, candidate: Locatin
   } else {
     let matchCount = 0;
     keyUnion.forEach((k) => {
-      if (baseAttrs[k] && candAttrs[k]) {
-        if (baseAttrs[k] === candAttrs[k]) matchCount += 1;
-        else {
-          // partial credit if substrings match
-          if (baseAttrs[k] && candAttrs[k] && (baseAttrs[k].includes(candAttrs[k]) || candAttrs[k].includes(baseAttrs[k]))) matchCount += 0.6;
+      const baseVal = baseAttrs[k];
+      const candVal = candAttrs[k];
+
+      if (typeof baseVal === 'string' && typeof candVal === 'string') {
+        if (baseVal === candVal) matchCount += 1;
+        else if (baseVal.includes(candVal) || candVal.includes(baseVal)) {
+          matchCount += 0.6;
         }
       }
     });

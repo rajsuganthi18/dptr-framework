@@ -16,9 +16,10 @@ This repository is intentionally locked to the final paper direction:
 - src/invariant-verifier.ts
 - src/visual-oracle.ts
 - tests/demo.spec.ts
-- papers/ai-assisted-defect-preserving-self-healing-gui-test-automation-for-online-gaming-platforms.md
 - README.md
 - EVIDENCE.md
+- RESEARCH_SCOPE.md
+- CONTRIBUTING.md
 
 ## Archived/removed intentionally
 

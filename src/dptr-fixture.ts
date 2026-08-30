@@ -2,8 +2,10 @@ import { test as base, expect, Page } from '@playwright/test';
 import { DPTRResolver } from './dptr-engine';
 
 /**
- * Extend Playwright test fixtures with `dptr`.
- * This fixture monkey-patches `page.locator` per-test so actions go through DPTRResolver on failure.
+ * Playwright fixture extension that routes action failures through the DPTR repair engine.
+ *
+ * The fixture intentionally preserves the original Playwright failure semantics by rethrowing
+ * errors when the repair layer cannot establish a safe resolution.
  */
 
 type Fixtures = {

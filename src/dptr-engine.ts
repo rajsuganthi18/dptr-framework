@@ -5,22 +5,35 @@ import { captureElementBuffer, evaluateVisualSimilarity, visualSimilarityFromBuf
 import { InvariantVerifier } from './invariant-verifier';
 
 /**
- * DPTRResolver is the core of the prototype.
- * It stores baseline locating contexts (captured from a golden page), and when a locator action
- * fails it attempts to find candidate elements, score them, and either HEAL or REJECT_BUG.
+ * Resolves failed GUI actions by comparing a baseline element context to candidate replacements.
+ *
+ * The resolver follows a conservative defect-preserving strategy: when the evidence suggests
+ * a valid UI change, it attempts a HEAL; when the evidence instead points to a real defect or
+ * an ambiguous state, it abstains by rejecting the repair.
  */
 export class DPTRResolver {
   private baselines: Map<string, LocatingContext> = new Map();
   public lastEvaluation: Map<string, OracleEvaluationResult> = new Map();
 
+  /**
+   * Registers a golden locating context for a selector that should be repaired if it later fails.
+   */
   registerBaseline(selector: string, ctx: LocatingContext) {
     this.baselines.set(selector, ctx);
   }
 
+  /**
+   * Returns the baseline context associated with a selector, if it exists.
+   */
   getBaseline(selector: string): LocatingContext | undefined {
     return this.baselines.get(selector);
   }
 
+  /**
+   * Discovers plausible replacement elements from the live DOM using a broad but bounded search.
+   * The strategy is intentionally conservative: it favors likely candidates without overfitting to
+   * a single DOM path.
+   */
   private async discoverCandidateElements(page: Page, baseline: LocatingContext): Promise<any[]> {
     const selectors = [
       'button',
@@ -66,6 +79,11 @@ export class DPTRResolver {
     return Array.isArray(results) ? results : [];
   }
 
+  /**
+   * Captures the baseline context for a selector before a UI mutation occurs.
+   * The captured state includes identifying tags, text, attributes, box geometry, and a
+   * screenshot so later comparisons can judge whether a failure is a legitimate UI change.
+   */
   async captureContext(page: Page, selector: string): Promise<LocatingContext> {
     const locator = page.locator(selector).first();
     const tag = await locator.evaluate((el) => el.tagName.toLowerCase()).catch(() => 'div');
@@ -86,7 +104,7 @@ export class DPTRResolver {
       textContent,
       boundingBox,
       attributes: attrs,
-      screenshotBuffer,
+      ...(screenshotBuffer ? { screenshotBuffer } : {}),
     };
     this.registerBaseline(selector, ctx);
     return ctx;
@@ -180,16 +198,17 @@ export class DPTRResolver {
           }
         })();
       }
-      enrichedCandidates.push({
+      const enrichedCandidate: LocatingContext = {
         originalSelector: selector,
         tag: c.tag,
         textContent: c.textContent,
         attributes: c.attributes,
         boundingBox,
-        screenshotBuffer,
-        // preserve template match score if present
+        ...(screenshotBuffer ? { screenshotBuffer } : {}),
         ...(c._templateMatchScore ? { templateMatchScore: c._templateMatchScore } : {}),
-      });
+      };
+
+      enrichedCandidates.push(enrichedCandidate);
     }
 
     // Score each candidate via DOM and Visual similarity + invariants
@@ -271,7 +290,7 @@ export class DPTRResolver {
       decision = 'REJECT_BUG';
       reason = 'No candidates found on page';
     } else {
-      const bestCandidate = scored[0];
+      const bestCandidate = scored[0]!;
       if (!bestCandidate.invariant || bestCandidate.visualSim < 0.4) {
         decision = 'REJECT_BUG';
         reason = `Best candidate failed invariant or visual checks (visual=${bestCandidate.visualSim}, invariant=${bestCandidate.invariant})`;

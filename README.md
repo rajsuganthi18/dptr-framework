@@ -1,52 +1,100 @@
-# DPTR-framework
+# DPTR Framework
 
-This repository holds a research prototype for a defect-preserving self-healing GUI test repair framework, aligned to the final paper:
+A prototype TypeScript + Playwright framework for defect-preserving self-healing GUI test automation. The system is designed around a conservative repair decision policy: when evidence suggests a real application defect, it should reject the repair instead of masking the problem.
 
-"Toward Defect-Preserving Self-Healing GUI Test Automation for Real-Time Online Gaming Platforms: A Conservative, Multi-Signal Repair-Decision Framework"
+## Purpose
 
-## Scope
-
-This repository is intentionally kept narrow and aligned to the final research direction:
+This project focuses on a narrow but important research problem:
 
 - AI-assisted self-healing GUI test automation
-- online gaming platforms
-- defect-preserving repair
-- false healing / defect masking as the research problem
-- software testing and automation, not generic game AI or analytics
+- online gaming platform interfaces
+- defect-preserving repair decisions
+- avoiding false healing when the UI appears legitimate but the product behavior is broken
 
-## Core files
+The implementation remains intentionally scoped and evidence-driven. It is a research prototype rather than a production-ready test platform.
 
-- src/dptr-engine.ts: DPTR repair engine and decision gate
-- src/dptr-fixture.ts: Playwright fixture integration
-- src/dptr-types.ts: oracle and context types
-- src/invariant-verifier.ts: runtime invariant checks
-- src/visual-oracle.ts: visual similarity and template matching helper
-- tests/demo.spec.ts: demonstration scenarios
-- papers/ai-assisted-defect-preserving-self-healing-gui-test-automation-for-online-gaming-platforms.md: final paper draft
+## Repository structure
 
-## Evidence and honesty
+```text
+.
+├── .github/
+│   └── workflows/
+│       └── ci.yml
+├── docs/
+│   ├── api/
+│   │   └── README.md
+│   └── examples/
+│       ├── README.md
+│       └── basic-heal.ts
+├── src/
+│   ├── core/
+│   │   └── index.ts
+│   ├── dptr-engine.ts
+│   ├── dptr-fixture.ts
+│   ├── dptr-types.ts
+│   ├── invariant-verifier.ts
+│   ├── visual-oracle.ts
+│   └── dom-delta.ts
+├── tests/
+│   └── demo.spec.ts
+├── .eslintrc.json
+├── .gitignore
+├── CONTRIBUTING.md
+├── EVIDENCE.md
+├── README.md
+├── RESEARCH_SCOPE.md
+├── package.json
+├── tsconfig.json
+└── playwright.config.ts
+```
 
-This project is a research prototype and not yet a validated publication-grade implementation.
-
-The repository intentionally maintains honest evidence in:
-
-- EVIDENCE.md
-- RESEARCH_SCOPE.md
-
-## Setup
+## Installation
 
 1. Install dependencies:
 
    npm install
 
-2. Install Playwright browsers:
+2. Install the browser runtime:
 
    npx playwright install chromium
 
-3. Run the prototype suite:
+## Common commands
 
-   npx playwright test
+```bash
+npm run build
+npm run typecheck
+npm run lint
+npm test
+npm run test:demo
+```
 
-## Important note
+## Decision model
 
-The current code and tests are intentionally limited to the prototype scope described in the paper. Claims in the paper are kept conservative and aligned to what the repository currently demonstrates.
+The framework classifies outcomes as:
+
+- HEAL: the failure is consistent with legitimate UI evolution
+- REJECT_BUG: the failure is likely a real defect and should be preserved
+- UNKNOWN: the evidence is insufficient to justify repair
+
+The design priority is to prefer uncertainty or bug rejection over unsafe healing.
+
+## API and usage docs
+
+- API overview: [docs/api/README.md](docs/api/README.md)
+- Examples: [docs/examples/README.md](docs/examples/README.md)
+
+## Evidence and honesty
+
+This repository is intentionally honest about scope and maturity:
+
+- the build currently compiles
+- the demo suite is still a prototype and has not reached broad validation
+- claims remain conservative and are documented in [EVIDENCE.md](EVIDENCE.md)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution expectations and project workflow.
+
+## License
+
+MIT
