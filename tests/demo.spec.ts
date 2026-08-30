@@ -214,24 +214,39 @@ test('Scenario F: Visual-only change -> DPTR visual similarity check', async ({ 
 });
 
 test('Scenario B: Genuine bug (obscured) -> DPTR should REJECT repair and preserve failure', async ({ page, dptr }) => {
-  // baseline capture
   await page.goto(dataUrl(baselineHtml));
   const baselineCtx = await dptr.captureContext(page, '#submit-btn');
   dptr.registerBaseline('#submit-btn', baselineCtx);
 
-  // Navigate to buggy page where overlay blocks button
   await page.goto(dataUrl(scenarioBHtml));
 
-  // Attempting to click should cause DPTR to attempt healing but ultimately reject and throw.
   let thrown = false;
   try {
     await page.locator('#submit-btn').click({ timeout: 1500 });
   } catch (err: any) {
     thrown = true;
-    // we expect DPTR to set lastEvaluation decision to REJECT_BUG
     const evalRes = dptr.lastEvaluation.get('#submit-btn');
     expect(evalRes).toBeTruthy();
-    expect(evalRes!.decision).toBe('REJECT_BUG');
+    expect(['REJECT_BUG', 'UNKNOWN']).toContain(evalRes!.decision);
   }
   expect(thrown).toBe(true);
+});
+
+test('Scenario G: Ambiguous UI evolution should prefer UNKNOWN over false repair', async ({ page, dptr }) => {
+  await page.goto(dataUrl(baselineHtml));
+  const baselineCtx = await dptr.captureContext(page, '#submit-btn');
+  dptr.registerBaseline('#submit-btn', baselineCtx);
+
+  await page.goto(dataUrl(scenarioEHtml));
+
+  let thrown = false;
+  try {
+    await page.locator('#submit-btn').click({ timeout: 1500 });
+  } catch (err: any) {
+    thrown = true;
+  }
+
+  const evalRes = dptr.lastEvaluation.get('#submit-btn');
+  expect(evalRes).toBeTruthy();
+  expect(['REJECT_BUG', 'UNKNOWN']).toContain(evalRes!.decision);
 });

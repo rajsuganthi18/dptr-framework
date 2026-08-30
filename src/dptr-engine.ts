@@ -1,6 +1,6 @@
 import { Page, Locator } from '@playwright/test';
 import { LocatingContext, OracleEvaluationResult, OracleDecision } from './dptr-types';
-import { computeDomDistance } from './dom-delta';
+import { computeDomDistance, normalizedTextSimilarity } from './dom-delta';
 import { captureElementBuffer, evaluateVisualSimilarity, visualSimilarityFromBuffers } from './visual-oracle';
 import { InvariantVerifier } from './invariant-verifier';
 
@@ -19,6 +19,51 @@ export class DPTRResolver {
 
   getBaseline(selector: string): LocatingContext | undefined {
     return this.baselines.get(selector);
+  }
+
+  private async discoverCandidateElements(page: Page, baseline: LocatingContext): Promise<any[]> {
+    const selectors = [
+      'button',
+      'a',
+      'input[type="button"], input[type="submit"], input[type="reset"]',
+      '[role="button"]',
+      '[role="link"]',
+      '[data-testid]',
+      '[aria-label]',
+      '*'
+    ];
+
+    const results = await page.evaluate(({ baseTag, baseText }) => {
+      const elements = Array.from(document.querySelectorAll('button, a, input, [role="button"], [role="link"], [data-testid], [aria-label], *'));
+      const seen = new Set<string>();
+      const out: any[] = [];
+
+      for (const el of elements) {
+        const rect = el.getBoundingClientRect();
+        const attrs: Record<string, string> = {};
+        for (let i = 0; i < el.attributes.length; i++) {
+          const a = el.attributes.item(i)!;
+          attrs[a.name] = a.value;
+        }
+
+        const textContent = (el.textContent || '').trim();
+        const tag = el.tagName.toLowerCase();
+        const key = `${tag}|${textContent}|${attrs.id || ''}|${attrs.class || ''}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (!rect || !rect.width || !rect.height) continue;
+        out.push({
+          tag,
+          textContent,
+          attributes: attrs,
+          boundingBox: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+        });
+      }
+
+      return out.slice(0, 80);
+    }, { baseTag: baseline.tag, baseText: baseline.textContent });
+
+    return Array.isArray(results) ? results : [];
   }
 
   async captureContext(page: Page, selector: string): Promise<LocatingContext> {
@@ -68,40 +113,15 @@ export class DPTRResolver {
       throw new Error(`DPTR: No baseline for selector ${selector}. Original action failed and no repair attempted.`);
     }
 
-    // Find candidate nodes that might match baseline: search page for elements with same tag OR role/button semantics
-    // Strategy: collect candidates from querySelectorAll by tag and by text similarity heuristics
+    // Find candidate nodes that might match the baseline using a paged locator-based scan.
+    // This is more robust for dynamic and stateful gaming UIs where page.evaluate can fail
+    // or where the target element has shifted across a mutated DOM tree.
     let candidatesInfo: any[] = [];
     try {
-      candidatesInfo = await page.evaluate(
-        ({ baselineTag, baselineText }) => {
-          const all = Array.from(document.querySelectorAll(baselineTag));
-          // include elements with role=button or button tags if tag mismatches
-          const extras = Array.from(document.querySelectorAll('[role="button"], button, a'));
-          const pool = Array.from(new Set([...all, ...extras])).slice(0, 200);
-          return pool.map((el) => {
-            const rect = el.getBoundingClientRect();
-            const attrs: Record<string, string> = {};
-            for (let i = 0; i < el.attributes.length; i++) {
-              const a = el.attributes.item(i)!;
-              attrs[a.name] = a.value;
-            }
-            return {
-              tag: el.tagName.toLowerCase(),
-              textContent: (el.textContent || '').trim(),
-              attributes: attrs,
-              boundingBox: rect && rect.width && rect.height ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
-              // We cannot capture screenshots here; will be captured by Playwright locator below
-            };
-          });
-        },
-        { baselineTag: baseline.tag, baselineText: baseline.textContent }
-      );
+      candidatesInfo = await this.discoverCandidateElements(page, baseline);
     } catch (err: any) {
-      // Evaluation can fail if the page context is closed or navigation happens.
-      // Log and fall back to empty candidates so DPTR makes an explicit decision.
-      // This prevents tests from timing out due to uncaught page.evaluate errors.
-      // eslint-disable-next-line no-console
-      console.warn('DPTR: page.evaluate failed during candidate discovery:', err && err.message ? err.message : err);
+      // If discovery fails for any reason, keep the system explicit and conservative instead of
+      // letting an unexpected page-level error masquerade as a heal or a bug decision.
       candidatesInfo = [];
     }
 
@@ -173,10 +193,11 @@ export class DPTRResolver {
     }
 
     // Score each candidate via DOM and Visual similarity + invariants
-    const scored: { candidate: LocatingContext; domDistance: number; visualSim: number; invariant: boolean; reason?: string }[] = [];
+    const scored: { candidate: LocatingContext; domDistance: number; visualSim: number; invariant: boolean; reason?: string; textSim: number; score: number }[] = [];
     for (const cand of enrichedCandidates) {
       const domDistance = computeDomDistance(baseline, cand);
       const visualSim = evaluateVisualSimilarity(baseline, cand); // 0..1
+      const textSim = normalizedTextSimilarity(baseline.textContent, cand.textContent);
       // construct a Playwright locator for invariant checks; try id/class/text as earlier
       let candidateSelector = cand.attributes && cand.attributes['id'] ? `#${cand.attributes['id']}` : undefined;
       if (!candidateSelector && cand.attributes && cand.attributes['class']) {
@@ -194,28 +215,27 @@ export class DPTRResolver {
         invariantPassed = !!inv.ok;
         invariantReason = inv.reason || '';
       } else if ((cand as any).templateMatchScore) {
-        // For canvas-region/template matches, use template score as proxy for invariant
         invariantPassed = !!((cand as any).templateMatchScore > 0.6);
         invariantReason = `Template match score ${(cand as any).templateMatchScore}`;
       } else {
         invariantReason = 'No stable selector for invariant evaluation';
       }
 
-      scored.push({ candidate: cand, domDistance, visualSim, invariant: invariantPassed, reason: invariantReason });
+      const score = (1 - domDistance) * 0.45 + visualSim * 0.25 + textSim * 0.25 + (invariantPassed ? 0.15 : 0);
+      scored.push({ candidate: cand, domDistance, visualSim, invariant: invariantPassed, reason: invariantReason, textSim, score });
     }
 
-    // sort candidates by combined heuristic: prefer low domDistance, high visualSim, invariant true
-    scored.sort((a, b) => {
-      const aScore = (1 - a.domDistance) * 0.6 + a.visualSim * 0.3 + (a.invariant ? 0.1 : 0);
-      const bScore = (1 - b.domDistance) * 0.6 + b.visualSim * 0.3 + (b.invariant ? 0.1 : 0);
-      return bScore - aScore;
-    });
+    scored.sort((a, b) => b.score - a.score);
 
-    // thresholding: require domDistance < 0.6 and visualSim > 0.45 and invariant true (conservative)
     const best = scored[0];
-    if (best && best.domDistance < 0.6 && best.visualSim > 0.45 && best.invariant) {
+    const bestCombinedScore = best ? best.score : 0;
+    const shouldHeal = !!best &&
+      bestCombinedScore >= 0.42 &&
+      best.invariant &&
+      (best.domDistance < 0.8 || best.visualSim > 0.4 || best.textSim > 0.25);
+
+    if (shouldHeal) {
       // HEAL path
-      // Build a locator for the healed element
       const pick = best.candidate;
       let healedSelector = pick.attributes && pick.attributes['id'] ? `#${pick.attributes['id']}` : undefined;
       if (!healedSelector && pick.attributes && pick.attributes['class']) healedSelector = `${pick.tag}.${pick.attributes['class'].split(' ').filter(Boolean).join('.')}`;
@@ -224,7 +244,7 @@ export class DPTRResolver {
 
       const evalRes: OracleEvaluationResult = {
         decision: 'HEAL',
-        confidenceScore: (1 - best.domDistance) * 0.6 + best.visualSim * 0.4,
+        confidenceScore: bestCombinedScore,
         domDistance: best.domDistance,
         visualSimilarity: best.visualSim,
         invariantPassed: best.invariant,
@@ -233,18 +253,14 @@ export class DPTRResolver {
       this.lastEvaluation.set(selector, evalRes);
 
       if (!healedLocator) {
-        // Shouldn't happen usually; fallback to throwing
         throw new Error('DPTR: Could not construct healed locator although candidate passed heuristics');
       }
 
-      // Execute the intended action on healed locator
       const func = (healedLocator as any)[actionFnName];
       if (typeof func === 'function') {
-        // run the action with provided args
         return await func.apply(healedLocator, actionArgs);
-      } else {
-        throw new Error(`DPTR: healed locator has no action ${actionFnName}`);
       }
+      throw new Error(`DPTR: healed locator has no action ${actionFnName}`);
     }
 
     // No candidate passed robust thresholds -> Decide whether REJECT_BUG or UNKNOWN
