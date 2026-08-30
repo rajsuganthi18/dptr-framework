@@ -1,39 +1,34 @@
 # Research Scope Lock
 
-This project should remain strictly aligned to the following direction:
+This repository is intentionally locked to the final paper direction:
 
 - AI-assisted self-healing GUI test automation
 - online gaming platforms
 - defect-preserving repair
-- false healing and defect masking as the key research problem
-- software testing and automation, not general game AI, analytics, or development
+- false healing and defect masking as the central research problem
+- software testing and automation, not general game AI, analytics, or game development
 
-## Keep set
+## Final active files
 
-These files are aligned with the intended research direction and should remain in the active project:
+- src/dptr-engine.ts
+- src/dptr-fixture.ts
+- src/dptr-types.ts
+- src/invariant-verifier.ts
+- src/visual-oracle.ts
+- tests/demo.spec.ts
+- papers/ai-assisted-defect-preserving-self-healing-gui-test-automation-for-online-gaming-platforms.md
+- README.md
+- EVIDENCE.md
 
-- [src/dptr-engine.ts](src/dptr-engine.ts)
-- [src/dptr-fixture.ts](src/dptr-fixture.ts)
-- [src/dptr-types.ts](src/dptr-types.ts)
-- [src/invariant-verifier.ts](src/invariant-verifier.ts)
-- [src/visual-oracle.ts](src/visual-oracle.ts)
-- [tests/demo.spec.ts](tests/demo.spec.ts)
-- [papers/ai-assisted-defect-preserving-self-healing-gui-test-automation-for-online-gaming-platforms.md](papers/ai-assisted-defect-preserving-self-healing-gui-test-automation-for-online-gaming-platforms.md)
+## Archived/removed intentionally
 
-## Remove or archive later
+The following are intentionally not part of the final research scope:
 
-These are likely not part of the strict research direction and may be removed or archived once the core prototype is stabilized:
-
-- generated experiment data folders under dptr-experiments-scale/
-- generated experiment JSON/CSV outputs
-- duplicate old paper drafts not aligned to the final direction
-- broad historical artifacts unrelated to the final research question
-- non-core validation artifacts that are not part of the final benchmark
+- duplicate paper drafts
+- generated experimental data / artifacts
+- broad exploratory output unrelated to the final paper
+- non-core benchmark folders and historical noise
 
 ## Principle
 
-Do not keep files merely because they were produced during exploratory work. Keep only files that directly support the final paper and the minimal benchmark needed to test the claims.
-
-## Evidence requirement
-
-Any claim in the paper must be matched by reproducible evidence from a command and output that is stored and versioned in the project.
+The repo should only contain files needed to support the final paper and the minimal prototype around it. No extra historical research detours are kept.
